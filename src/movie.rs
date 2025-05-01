@@ -83,7 +83,7 @@ where
     serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
 
-const MAX_BUDGET: u32 = 10000000;
+const MAX_BUDGET: u32 = 1000000000;
 const MIN_BUDGET: u32 = 0;
 
 impl Movie {
@@ -91,8 +91,7 @@ impl Movie {
         let budget_diff = cbr::similarity_number(self.budget, other.budget, MAX_BUDGET, MIN_BUDGET);
         let genres_diff = cbr::similarity_id(&self.genres, &other.genres);
         let homepage_diff = cbr::similarity_string(&self.homepage, &other.homepage);
-        let id_diff = cbr::similarity_id(&[self.clone()], &[other.clone()]);
 
-        budget_diff + genres_diff + homepage_diff + id_diff
+        budget_diff + genres_diff + homepage_diff
     }
 }
