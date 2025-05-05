@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 use crate::cbr::{self, HasId};
@@ -6,17 +8,17 @@ use crate::cbr::{self, HasId};
 pub struct Movie {
     pub budget: u32,
     #[serde(deserialize_with = "deserialize_json_string")]
-    genres: Vec<Genre>,
-    homepage: String,
+    pub genres: Vec<Genre>,
+    pub homepage: String,
     pub id: u32,
     #[serde(deserialize_with = "deserialize_json_string")]
-    keywords: Vec<Keyword>,
+    pub keywords: Vec<Keyword>,
     original_language: String,
     original_title: String,
     overview: String,
     popularity: f32,
     #[serde(deserialize_with = "deserialize_json_string")]
-    production_companies: Vec<Company>,
+    pub production_companies: Vec<Company>,
     #[serde(deserialize_with = "deserialize_json_string")]
     production_countries: Vec<Country>,
     pub release_date: String,
@@ -38,9 +40,15 @@ impl HasId for Movie {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct Genre {
+pub struct Genre {
     id: u32,
     name: String,
+}
+
+impl Display for Genre {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 impl HasId for Genre {
@@ -50,7 +58,7 @@ impl HasId for Genre {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct Keyword {
+pub struct Keyword {
     id: u32,
     name: String,
 }
@@ -61,8 +69,14 @@ impl HasId for Keyword {
     }
 }
 
+impl Display for Keyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
-struct Company {
+pub struct Company {
     id: u32,
     name: String,
 }
@@ -70,6 +84,12 @@ struct Company {
 impl HasId for Company {
     fn id(&self) -> u32 {
         self.id
+    }
+}
+
+impl Display for Company {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
     }
 }
 
@@ -99,14 +119,12 @@ const BUDGET_WEIGHT: f32 = 0.3;
 const GENRES_WEIGHT: f32 = 1.0;
 const HOMEPAGE_WEIGHT: f32 = 0.2;
 const KEYWORDS_WEIGHT: f32 = 2.0;
-const OVERVIEW_WEIGHT: f32 = 2.0;
 const PRODUCTION_COMPANIES_WEIGHT: f32 = 1.0;
 const TITLE_WEIGHT: f32 = 2.5;
 const TOTAL_WEIGHT: f32 = BUDGET_WEIGHT
     + GENRES_WEIGHT
     + HOMEPAGE_WEIGHT
     + KEYWORDS_WEIGHT
-    + OVERVIEW_WEIGHT
     + PRODUCTION_COMPANIES_WEIGHT
     + TITLE_WEIGHT;
 
@@ -118,8 +136,6 @@ impl Movie {
         let homepage_diff =
             cbr::similarity_string(&self.homepage, &other.homepage) * HOMEPAGE_WEIGHT;
         let keywords_diff = cbr::similarity_id(&self.keywords, &other.keywords) * KEYWORDS_WEIGHT;
-        let overview_diff =
-            cbr::similarity_string(&self.overview, &other.overview) * OVERVIEW_WEIGHT;
         let production_companies_diff =
             cbr::similarity_id(&self.production_companies, &other.production_companies)
                 * PRODUCTION_COMPANIES_WEIGHT;
@@ -129,7 +145,6 @@ impl Movie {
             + genres_diff
             + homepage_diff
             + keywords_diff
-            + overview_diff
             + production_companies_diff
             + title_diff;
 

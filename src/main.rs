@@ -1,5 +1,5 @@
 use std::path::Path;
-use cbr::gui::MovieSimilarityApp;
+use movie_cbr::gui::MovieSimilarityApp;
 
 fn main() -> Result<(), eframe::Error> {
     let native_options = eframe::NativeOptions {

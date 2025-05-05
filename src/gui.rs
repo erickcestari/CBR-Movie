@@ -118,48 +118,79 @@ impl eframe::App for MovieSimilarityApp {
                             self.pending_selection = Some(idx);
                         }
                     }
-                });
 
-                ui.add_space(20.0);
+                    ui.add_space(20.0);
 
-                if let Some(selected_idx) = self.selected_movie_index {
-                    let selected_movie = &self.movies[selected_idx];
+                    if let Some(selected_idx) = self.selected_movie_index {
+                        let selected_movie = &self.movies[selected_idx];
 
-                    ui.heading("Selected Movie:");
-                    ui.label(format!("Title: {}", selected_movie.title));
-                    ui.label(format!("Year: {}", selected_movie.release_date));
-                    ui.label(format!("Budget: ${}", selected_movie.budget));
-                    ui.label(format!("Rating: {:.1}", selected_movie.vote_average));
+                        ui.heading("Selected Movie:");
+                        ui.label(format!("Title: {}", selected_movie.title));
+                        ui.label(format!("Year: {}", selected_movie.release_date));
+                        ui.label(format!("Budget: ${}", selected_movie.budget));
+                        ui.label(format!("Rating: {:.1}", selected_movie.vote_average));
 
-                    ui.add_space(10.0);
-                    ui.heading(format!("Top {} Similar Movies:", TOP_N));
+                        ui.collapsing("Similarity Calculation Fields", |ui| {
+                            ui.label(format!("Title: ${}", selected_movie.title));
 
-                    let mut count = 0;
-                    let mut index = 0;
+                            ui.label(format!("Budget: ${}", selected_movie.budget));
 
-                    let similar_indices: Vec<(usize, f32)> = self.similar_movies.clone();
+                            ui.label("Genres:");
+                            ui.indent("genres", |ui| {
+                                for genre in &selected_movie.genres {
+                                    ui.label(format!("- {}", genre));
+                                }
+                            });
 
-                    while count < TOP_N && index < similar_indices.len() {
-                        let (movie_idx, similarity) = similar_indices[index];
-                        index += 1;
-
-                        if movie_idx == selected_idx {
-                            continue;
-                        }
-
-                        let similar_movie = &self.movies[movie_idx];
-
-                        ui.horizontal(|ui| {
-                            ui.label(format!("{}. ", count + 1));
-                            if ui.selectable_label(false, &similar_movie.title).clicked() {
-                                self.pending_selection = Some(movie_idx);
+                            if !selected_movie.homepage.is_empty() {
+                                ui.label(format!("Homepage: {}", selected_movie.homepage));
                             }
-                            ui.label(format!("(Similarity: {:.4})", similarity));
+
+                            ui.label("Keywords:");
+                            ui.indent("keywords", |ui| {
+                                for keyword in &selected_movie.keywords {
+                                    ui.label(format!("- {}", keyword));
+                                }
+                            });
+
+                            ui.label("Production Companies:");
+                            ui.indent("production_companies", |ui| {
+                                for company in &selected_movie.production_companies {
+                                    ui.label(format!("- {}", company));
+                                }
+                            });
                         });
 
-                        count += 1;
+                        ui.add_space(10.0);
+                        ui.heading(format!("Top {} Similar Movies:", TOP_N));
+
+                        let mut count = 0;
+                        let mut index = 0;
+
+                        let similar_indices: Vec<(usize, f32)> = self.similar_movies.clone();
+
+                        while count < TOP_N && index < similar_indices.len() {
+                            let (movie_idx, similarity) = similar_indices[index];
+                            index += 1;
+
+                            if movie_idx == selected_idx {
+                                continue;
+                            }
+
+                            let similar_movie = &self.movies[movie_idx];
+
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{}. ", count + 1));
+                                if ui.selectable_label(false, &similar_movie.title).clicked() {
+                                    self.pending_selection = Some(movie_idx);
+                                }
+                                ui.label(format!("(Similarity: {:.4})", similarity));
+                            });
+
+                            count += 1;
+                        }
                     }
-                }
+                });
             }
         });
     }
