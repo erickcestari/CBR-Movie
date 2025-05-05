@@ -2,7 +2,7 @@ use strsim::levenshtein;
 
 pub fn similarity_number(a: u32, b: u32, max: u32, min: u32) -> f32 {
     let diff = (a as f32 - b as f32).abs() / (max - min) as f32;
-    diff
+    1.0 - diff
 }
 
 pub fn similarity_string(a: &str, b: &str) -> f32 {
