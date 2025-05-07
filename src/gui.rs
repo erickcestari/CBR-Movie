@@ -1,71 +1,97 @@
-use crate::movie::Movie;
-use eframe::egui::{self, CursorIcon, Margin};
-use egui::{Color32, CornerRadius, RichText, Stroke, Vec2};
-use std::{fs::File, path::Path};
+// Import necessary modules and types from the crate and external dependencies
+use crate::movie::Movie; // Import the Movie struct from the local movie module
+use eframe::egui::{self, CursorIcon, Margin}; // Import egui and related components for GUI
+use egui::{Color32, CornerRadius, RichText, Stroke, Vec2}; // Import specific egui types for styling
+use std::{fs::File, path::Path}; // Import File and Path from standard library for file operations
 
+/// ColorTheme defines the color palette used throughout the application
+/// This struct centralizes all color definitions for consistent UI styling
 struct ColorTheme {
-    primary: Color32,
-    primary_light: Color32,
-    primary_dark: Color32,
-    secondary: Color32,
-    background: Color32,
-    card_bg: Color32,
-    text_primary: Color32,
-    text_secondary: Color32,
-    border_light: Color32,
-    selected_bg: Color32,
+    primary: Color32,        // Main brand/accent color
+    primary_light: Color32,  // Lighter version of primary color
+    primary_dark: Color32,   // Darker version of primary color
+    secondary: Color32,      // Secondary color for contrasting elements
+    background: Color32,     // Main application background color
+    card_bg: Color32,        // Background color for card elements
+    text_primary: Color32,   // Main text color
+    text_secondary: Color32, // Secondary text color (for less emphasis)
+    border_light: Color32,   // Light border color
+    selected_bg: Color32,    // Background color for selected elements
 }
 
+/// Default implementation for ColorTheme
+/// Sets up a dark theme with orange/brown accent colors
 impl Default for ColorTheme {
     fn default() -> Self {
         ColorTheme {
-            primary: Color32::from_rgb(210, 144, 84),
-            primary_light: Color32::from_rgb(237, 184, 121),
-            primary_dark: Color32::from_rgb(160, 95, 50),
-            secondary: Color32::from_rgb(235, 235, 235),
-            background: Color32::from_rgb(24, 24, 24),
-            card_bg: Color32::from_rgb(36, 36, 36),
-            text_primary: Color32::from_rgb(235, 235, 235),
-            text_secondary: Color32::from_rgb(160, 160, 160),
-            border_light: Color32::from_rgb(64, 64, 64),
-            selected_bg: Color32::from_rgb(54, 45, 38),
+            primary: Color32::from_rgb(210, 144, 84), // Orange-brown
+            primary_light: Color32::from_rgb(237, 184, 121), // Light orange-brown
+            primary_dark: Color32::from_rgb(160, 95, 50), // Dark orange-brown
+            secondary: Color32::from_rgb(235, 235, 235), // Light gray
+            background: Color32::from_rgb(24, 24, 24), // Very dark gray (almost black)
+            card_bg: Color32::from_rgb(36, 36, 36),   // Dark gray (for cards)
+            text_primary: Color32::from_rgb(235, 235, 235), // Light gray text
+            text_secondary: Color32::from_rgb(160, 160, 160), // Medium gray text
+            border_light: Color32::from_rgb(64, 64, 64), // Medium-dark gray border
+            selected_bg: Color32::from_rgb(54, 45, 38), // Dark brown-gray for selection
         }
     }
 }
 
+// Constant defining how many similar movies to display
 const TOP_N: usize = 10;
 
+/// Main application struct for the Movie Similarity App
+/// Contains all state needed to run the application
 #[derive(Default)]
 pub struct MovieSimilarityApp {
-    movies: Vec<Movie>,
-    selected_movie_index: Option<usize>,
-    similar_movies: Vec<(usize, f32)>,
-    min_budget: u32,
-    max_budget: u32,
-    search_query: String,
-    filtered_indices: Vec<usize>,
-    pending_selection: Option<usize>,
-    theme: ColorTheme,
+    movies: Vec<Movie>,                  // List of all movies loaded from CSV
+    selected_movie_index: Option<usize>, // Currently selected movie (if any)
+    similar_movies: Vec<(usize, f32)>,   // List of similar movies with similarity scores
+    min_budget: u32,                     // Minimum movie budget (used for normalization)
+    max_budget: u32,                     // Maximum movie budget (used for normalization)
+    search_query: String,                // Current search query text
+    filtered_indices: Vec<usize>,        // Indices of movies matching the search query
+    pending_selection: Option<usize>,    // Movie selection that hasn't been processed yet
+    theme: ColorTheme,                   // Color theme for the application
 }
 
 impl MovieSimilarityApp {
+    /// Loads movie data from a CSV file at the specified path
+    ///
+    /// # Arguments
+    /// * `path` - Path to the CSV file containing movie data
+    ///
+    /// # Returns
+    /// * `Result<(), Box<dyn std::error::Error>>` - Success or error
+    ///
+    /// This function reads the CSV, deserializes it to Movie objects,
+    /// initializes the min/max budget values for later normalization,
+    /// and sets up the filtered indices list.
     pub fn load_movies(&mut self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        // Open the file at the specified path
         let file = File::open(path)?;
+
+        // Create a CSV reader with headers and flexible parsing
         let mut csv_reader = csv::ReaderBuilder::new()
             .has_headers(true)
             .flexible(true)
             .from_reader(file);
 
+        // Deserialize the CSV rows into Movie objects
         self.movies = csv_reader
             .deserialize()
             .collect::<Result<Vec<Movie>, _>>()?;
 
+        // Find minimum budget across all movies (for normalization)
         self.min_budget = self
             .movies
             .iter()
             .map(|movie| movie.budget)
             .min()
             .unwrap_or(0);
+
+        // Find maximum budget across all movies (for normalization)
         self.max_budget = self
             .movies
             .iter()
@@ -73,18 +99,28 @@ impl MovieSimilarityApp {
             .max()
             .unwrap_or(0);
 
+        // Initialize filtered_indices with all movie indices
         self.filtered_indices = (0..self.movies.len()).collect();
+
+        // Initialize the color theme
         self.theme = ColorTheme::default();
 
         Ok(())
     }
 
+    /// Calculates similarity scores between the selected movie and all other movies
+    ///
+    /// This function is called when a movie is selected. It:
+    /// 1. Gets the selected movie as the reference
+    /// 2. Calculates similarity for each movie against the reference
+    /// 3. Sorts the results by similarity score in descending order
     fn calculate_similarities(&mut self) {
         if let Some(selected_idx) = self.selected_movie_index {
             let reference_movie = &self.movies[selected_idx];
             let min_budget = self.min_budget;
             let max_budget = self.max_budget;
 
+            // Calculate similarity scores for all movies compared to the reference
             let similar_movies_vec: Vec<(usize, f32)> = self
                 .movies
                 .iter()
@@ -97,11 +133,16 @@ impl MovieSimilarityApp {
 
             self.similar_movies = similar_movies_vec;
 
+            // Sort movies by similarity score (descending)
             self.similar_movies
                 .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         }
     }
 
+    /// Filters the movies based on the current search query
+    ///
+    /// Updates filtered_indices to contain only indices of movies
+    /// whose titles contain the search query (case insensitive)
     fn filter_movies(&mut self) {
         let query = self.search_query.to_lowercase();
         self.filtered_indices = self
@@ -113,6 +154,15 @@ impl MovieSimilarityApp {
             .collect();
     }
 
+    /// Processes any pending movie selection
+    ///
+    /// When a movie is clicked, the selection is stored as "pending"
+    /// and processed here to avoid borrow checker issues. This function:
+    /// 1. Takes the pending selection (if any)
+    /// 2. Updates the selected movie index
+    /// 3. Recalculates similarities
+    /// 4. Updates the search query to the selected movie's title
+    /// 5. Filters the movie list accordingly
     fn process_pending_selection(&mut self) {
         if let Some(idx) = self.pending_selection.take() {
             self.selected_movie_index = Some(idx);
@@ -122,7 +172,20 @@ impl MovieSimilarityApp {
         }
     }
 
+    /// Draws a movie card UI element with appropriate styling
+    ///
+    /// # Arguments
+    /// * `ui` - The egui UI to draw on
+    /// * `movie` - The movie to display in the card
+    /// * `selected` - Whether this movie is currently selected
+    ///
+    /// # Returns
+    /// * `egui::Response` - The UI response for interaction handling
+    ///
+    /// Creates a styled card for a movie with appropriate colors and
+    /// interactions (hover cursor, click sensing)
     fn draw_card(&self, ui: &mut egui::Ui, movie: &Movie, selected: bool) -> egui::Response {
+        // Create a frame with appropriate styling based on selection state
         let frame = egui::Frame::new()
             .fill(if selected {
                 self.theme.selected_bg
@@ -141,6 +204,7 @@ impl MovieSimilarityApp {
             .inner_margin(Margin::same(10))
             .outer_margin(Margin::same(4));
 
+        // Show the frame with the movie title
         let response = frame
             .show(ui, |ui| {
                 ui.add(egui::Label::new(
@@ -156,17 +220,31 @@ impl MovieSimilarityApp {
             })
             .response;
 
+        // Show pointing hand cursor on hover
         if response.hovered() {
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
+
+        // Make the card clickable
         response.interact(egui::Sense::click())
     }
 }
 
+/// Implementation of the eframe::App trait for MovieSimilarityApp
+/// This handles the main rendering and UI update loop
 impl eframe::App for MovieSimilarityApp {
+    /// Updates the application state and renders the UI
+    ///
+    /// # Arguments
+    /// * `ctx` - The egui context
+    /// * `_frame` - The eframe frame (unused)
+    ///
+    /// This is called each frame to update the application and render the UI
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Process any pending movie selection
         self.process_pending_selection();
 
+        // Set up the application style based on the theme
         let mut style = (*ctx.style()).clone();
         style.spacing.item_spacing = Vec2::new(8.0, 8.0);
         style.visuals.widgets.noninteractive.bg_fill = self.theme.background;
@@ -178,7 +256,9 @@ impl eframe::App for MovieSimilarityApp {
         style.visuals.window_shadow.blur = 5;
         ctx.set_style(style);
 
+        // Create the central panel for the main UI
         egui::CentralPanel::default().show(ctx, |ui| {
+            // App title at the top
             ui.vertical_centered(|ui| {
                 ui.add(egui::Label::new(
                     RichText::new("Movie Similarity Finder")
@@ -191,7 +271,9 @@ impl eframe::App for MovieSimilarityApp {
                 ui.add_space(10.0);
             });
 
+            // Main application content (only shown if movies are loaded)
             if !self.movies.is_empty() {
+                // Search bar
                 egui::Frame::new()
                     .fill(self.theme.card_bg)
                     .stroke(Stroke::new(1.0, self.theme.border_light))
@@ -220,7 +302,9 @@ impl eframe::App for MovieSimilarityApp {
 
                 ui.add_space(10.0);
 
+                // Two-column layout: movies list and details panel
                 ui.columns(2, |columns| {
+                    // Left column: Movie list
                     columns[0].vertical(|ui| {
                         ui.add(egui::Label::new(
                             RichText::new("Select a movie:")
@@ -230,6 +314,7 @@ impl eframe::App for MovieSimilarityApp {
                         ));
                         ui.add_space(5.0);
 
+                        // Scrollable list of movie cards
                         egui::ScrollArea::vertical()
                             .id_salt("movie_list")
                             .show(ui, |ui| {
@@ -244,10 +329,12 @@ impl eframe::App for MovieSimilarityApp {
                             });
                     });
 
+                    // Right column: Selected movie details and similar movies
                     columns[1].vertical(|ui| {
                         if let Some(selected_idx) = self.selected_movie_index {
                             let selected_movie = &self.movies[selected_idx];
 
+                            // Selected movie details panel
                             egui::Frame::new()
                                 .fill(self.theme.card_bg)
                                 .stroke(Stroke::new(1.0, self.theme.primary))
@@ -265,6 +352,7 @@ impl eframe::App for MovieSimilarityApp {
                                     ui.separator();
                                     ui.add_space(5.0);
 
+                                    // Movie title
                                     ui.add(egui::Label::new(
                                         RichText::new(&selected_movie.title)
                                             .size(20.0)
@@ -273,6 +361,7 @@ impl eframe::App for MovieSimilarityApp {
                                     ));
                                     ui.add_space(5.0);
 
+                                    // Year and rating
                                     ui.horizontal(|ui| {
                                         ui.add(egui::Label::new(
                                             RichText::new(format!(
@@ -292,6 +381,7 @@ impl eframe::App for MovieSimilarityApp {
                                         ));
                                     });
 
+                                    // Budget
                                     ui.add(egui::Label::new(
                                         RichText::new(format!(
                                             "Budget: ${}",
@@ -301,11 +391,13 @@ impl eframe::App for MovieSimilarityApp {
                                         .color(self.theme.text_secondary),
                                     ));
 
+                                    // Collapsible "More Details" section
                                     ui.collapsing(
                                         RichText::new("More Details")
                                             .size(14.0)
                                             .color(self.theme.primary),
                                         |ui| {
+                                            // Genres
                                             if !selected_movie.genres.is_empty() {
                                                 ui.horizontal_wrapped(|ui| {
                                                     ui.add(egui::Label::new(
@@ -322,6 +414,7 @@ impl eframe::App for MovieSimilarityApp {
                                                 });
                                             }
 
+                                            // Homepage
                                             if !selected_movie.homepage.is_empty() {
                                                 ui.horizontal(|ui| {
                                                     ui.add(egui::Label::new(
@@ -336,6 +429,7 @@ impl eframe::App for MovieSimilarityApp {
                                                 });
                                             }
 
+                                            // Keywords
                                             if !selected_movie.keywords.is_empty() {
                                                 ui.add(egui::Label::new(
                                                     RichText::new("Keywords:")
@@ -352,6 +446,7 @@ impl eframe::App for MovieSimilarityApp {
                                                 });
                                             }
 
+                                            // Production Companies
                                             if !selected_movie.production_companies.is_empty() {
                                                 ui.add(egui::Label::new(
                                                     RichText::new("Production Companies:")
@@ -372,6 +467,7 @@ impl eframe::App for MovieSimilarityApp {
 
                             ui.add_space(10.0);
 
+                            // Similar movies section
                             ui.add(egui::Label::new(
                                 RichText::new(format!("Top {} Similar Movies:", TOP_N))
                                     .size(18.0)
@@ -384,6 +480,7 @@ impl eframe::App for MovieSimilarityApp {
                             let mut index = 0;
                             let similar_indices: Vec<(usize, f32)> = self.similar_movies.clone();
 
+                            // Scrollable list of similar movies
                             egui::ScrollArea::vertical()
                                 .id_salt("similar_movies")
                                 .show(ui, |ui| {
@@ -391,12 +488,14 @@ impl eframe::App for MovieSimilarityApp {
                                         let (movie_idx, similarity) = similar_indices[index];
                                         index += 1;
 
+                                        // Skip the reference movie itself
                                         if movie_idx == selected_idx {
                                             continue;
                                         }
 
                                         let similar_movie = &self.movies[movie_idx];
 
+                                        // Create a card for each similar movie
                                         let response = egui::Frame::new()
                                             .fill(self.theme.card_bg)
                                             .stroke(Stroke::new(1.0, self.theme.border_light))
@@ -405,17 +504,20 @@ impl eframe::App for MovieSimilarityApp {
                                             .outer_margin(Margin::same(4))
                                             .show(ui, |ui| {
                                                 ui.horizontal(|ui| {
+                                                    // Ranking number
                                                     ui.add(egui::Label::new(
                                                         RichText::new(format!("{}.", count + 1))
                                                             .strong()
                                                             .color(self.theme.text_secondary),
                                                     ));
 
+                                                    // Movie title
                                                     ui.add(egui::Label::new(
                                                         RichText::new(&similar_movie.title)
                                                             .color(self.theme.primary),
                                                     ));
 
+                                                    // Similarity percentage (right-aligned)
                                                     ui.with_layout(
                                                         egui::Layout::right_to_left(
                                                             egui::Align::Center,
@@ -438,10 +540,12 @@ impl eframe::App for MovieSimilarityApp {
                                             .response
                                             .interact(egui::Sense::click());
 
+                                        // Show pointing hand cursor on hover
                                         if response.hovered() {
                                             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
                                         }
 
+                                        // Handle clicks to select this movie
                                         if response.clicked() {
                                             self.pending_selection = Some(movie_idx);
                                         }
@@ -449,6 +553,7 @@ impl eframe::App for MovieSimilarityApp {
                                     }
                                 });
                         } else {
+                            // Display a message when no movie is selected
                             ui.vertical_centered(|ui| {
                                 ui.add_space(50.0);
                                 ui.add(egui::Label::new(
